@@ -1,5 +1,6 @@
 import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
 import { Actions } from "@/bot/handler";
+import { Roles } from "@/bot/controller";
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
@@ -105,7 +106,14 @@ class Bot implements Structure {
         .setup()
         .catch((e: any) => {
           logger.error(`ERROR: Failed to set-up handler: ${e}`);
+        });
+
+      Roles
+        .setup()
+        .catch((e: any) => {
+          logger.error(`ERROR: Failed to set-up controller: ${e}`);
         })
+
     });
 
     process.on('SIGINT', () => this.shutdown());
@@ -129,4 +137,4 @@ const Manager = new Bot({
   status_message_id: process.env.STATUS_MESSAGE_ID || "",
 });
 
-export { Manager };
+export { Manager }
