@@ -1,0 +1,31 @@
+{
+  "name": "conviction",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir=dist --target=node",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.7",
+    "@types/bun": "latest",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@origranot/ts-logger": "^1.12.0",
+    "discord.js": "^14.23.2",
+    "dotenv": "^17.2.3"
+  }
+}
