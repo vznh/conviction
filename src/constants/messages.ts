@@ -22,4 +22,20 @@ export const MESSAGES = {
 
     LOADING_EVENTS: 'DEV: Loading event handlers.',
   },
+
+  ACTIONS: {
+    INIT: `# 🏗️\n\n
+Below are buttons to start your entry.\n
+**Create an entry** provides a private thread for you to submit items throughout your day.
+**View previous entries** provides a DM for you to review any previous entries you had completed before.
+    `
+  },
+
+  GRAB: {
+    NONE: '**ERROR**: There were no hard 75 entries found for you.'
+  },
+
+  EXISTENT: {
+    ENTRY: '**ERROR**: You already have an entry for today.'
+  }
 } as const;

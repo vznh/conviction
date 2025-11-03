@@ -1,5 +1,7 @@
 import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
+import { Actions } from "@/bot/handler";
 import { logger } from "@/lib/logger";
+import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
 import { EMBEDS } from "@/constants/embeds";
 
@@ -98,6 +100,12 @@ class Bot implements Structure {
     this.client.once('clientReady', () => {
       logger.info(`BOT: ${this.client.user?.tag}`);
       this.update(EMBEDS.STATUS.STARTUP);
+
+      Actions
+        .setup()
+        .catch((e: any) => {
+          logger.error(`ERROR: Failed to set-up handler: ${e}`);
+        })
     });
 
     process.on('SIGINT', () => this.shutdown());
@@ -115,9 +123,7 @@ class Bot implements Structure {
 }
 
 const Manager = new Bot({
-  client: new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
-  }),
+  client: discord_client,
   token: process.env.DISCORD_TOKEN || "",
   status_channel_id: process.env.STATUS_CHANNEL_ID || "",
   status_message_id: process.env.STATUS_MESSAGE_ID || "",
