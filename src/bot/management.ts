@@ -2,6 +2,7 @@ import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
 import { Actions } from "@/bot/handler";
 import { Roles } from "@/bot/controller";
 import { entry_service } from "@/services/entry-service";
+import { Tracker } from "@/bot/statuses";
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
@@ -106,13 +107,19 @@ class Bot implements Structure {
       Actions
         .setup()
         .catch((e: any) => {
-          logger.error(`ERROR: Failed to set-up handler: ${e}`);
+          logger.error(`Failed to set-up handler: ${e}`);
         });
 
       Roles
         .setup()
         .catch((e: any) => {
-          logger.error(`ERROR: Failed to set-up controller: ${e}`);
+          logger.error(`Failed to set-up controller: ${e}`);
+        })
+
+      Tracker
+        .setup()
+        .catch((e: any) => {
+          logger.error(`Failed to set-up status tracker: ${e}`);
         })
 
       this.client.on('messageCreate', async (message) => {
@@ -139,8 +146,8 @@ class Bot implements Structure {
 const Manager = new Bot({
   client: discord_client,
   token: process.env.DISCORD_TOKEN || "",
-  status_channel_id: process.env.STATUS_CHANNEL_ID || "",
-  status_message_id: process.env.STATUS_MESSAGE_ID || "",
+  status_channel_id: process.env.BOT_STATUS_CHANNEL_ID || "",
+  status_message_id: process.env.BOT_STATUS_MESSAGE_ID || "",
 });
 
 export { Manager }

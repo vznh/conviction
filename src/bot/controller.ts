@@ -1,6 +1,11 @@
+// bot/controller
+// Meant for role controlling.
+// Currently handles marketplace, role creation/deletion/parsing.
+// Services to other files.
 import { discord_client } from "@/lib/client";
 import { logger } from "@/lib/logger";
 import { colors } from "@/constants/colors";
+import { catch_exception } from "@/lib/exception";
 
 import {
   Client,
@@ -266,17 +271,37 @@ class Controller implements Structure {
       await interaction.editReply({
         content: `**ERROR**: ${validation.error}.`,
       });
+      await catch_exception.catch_exception(
+        'ROLE_VALIDATION_FAILED',
+        'VALIDATION',
+        validation.error || 'Unknown validation error',
+        interaction.user.id,
+        '_handle_create_modal'
+      );
       return;
     }
 
-    await this.create(interaction.user.id, interaction.guild.id, {
-      name,
-      desc,
-      type,
-    });
-    await interaction.editReply({
-      content: `**SUCCESS**: Created role \`${name}\`.`,
-    });
+    try {
+      await this.create(interaction.user.id, interaction.guild.id, {
+        name,
+        desc,
+        type,
+      });
+      await interaction.editReply({
+        content: `**SUCCESS**: Created role \`${name}\`.`,
+      });
+    } catch (e) {
+      await catch_exception.catch_exception(
+        'ROLE_CREATION_FAILED',
+        'CREATION',
+        `Failed to create role: ${e}`,
+        interaction.user.id,
+        '_handle_create_modal'
+      );
+      await interaction.editReply({
+        content: `**ERROR**: Failed to create role. Please try again.`,
+      });
+    }
   }
 
 
