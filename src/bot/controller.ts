@@ -331,7 +331,7 @@ class Controller implements Structure {
     await channel.send(content);
   }
 
-  private async _parse_marketplace(): Promise<
+  async _parse_marketplace(): Promise<
     Array<{
       role_id: string;
       name: string;

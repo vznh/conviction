@@ -1,6 +1,7 @@
 import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
 import { Actions } from "@/bot/handler";
 import { Roles } from "@/bot/controller";
+import { entry_service } from "@/services/entry-service";
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
@@ -113,6 +114,11 @@ class Bot implements Structure {
         .catch((e: any) => {
           logger.error(`ERROR: Failed to set-up controller: ${e}`);
         })
+
+      this.client.on('messageCreate', async (message) => {
+        if (message.author.bot) return;
+        await entry_service.handle_reply(message, this.client);
+      });
 
     });
 

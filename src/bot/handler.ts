@@ -10,7 +10,9 @@ import {
 } from "discord.js";
 import { logger } from "@/lib/logger";
 import { MESSAGES } from "@/constants/messages";
+import { LOGISTICS } from "@/constants/logistics";
 import { discord_client } from "@/lib/client";
+import { entry_service } from "@/services/entry-service";
 
 interface Options {
   client: Client;
@@ -118,6 +120,15 @@ class Handler implements Structure {
       await thread.members.add(user_id);
       await thread.members.add(this.client.user!.id);
 
+      const guild = await this.client.guilds.fetch(process.env.GUILD_ID || '');
+      const member = await guild.members.fetch(user_id);
+      
+      const embeds = await entry_service.create_entry_embeds(member);
+      
+      for (const embed of embeds) {
+        await thread.send({ embeds: [embed] });
+      }
+
       logger.info(`DEV: Created thread: ${name} for ${username}.`);
       return thread;
     } catch (e) {
@@ -138,7 +149,11 @@ class Handler implements Structure {
       const user_threads = active_threads.filter((thread: any) => thread.members.cache.has(user_id));
 
       if (user_threads.size === 0) {
-        await user.send(MESSAGES.GRAB.NONE);
+        try {
+          await user.send(MESSAGES.GRAB.NONE);
+        } catch (dm_error) {
+          logger.error(`ERROR: Could not DM user ${user_id}: ${dm_error}`);
+        }
         return;
       }
 
@@ -153,7 +168,11 @@ class Handler implements Structure {
           '0')} - ${entry.url}`)
         .join('\n');
 
-      await user.send(`## Entries\n${entries}`);
+      try {
+        await user.send(`## Entries\n${entries}`);
+      } catch (dm_error) {
+        logger.error(`ERROR: Could not DM entries to user ${user_id}: ${dm_error}`);
+      }
     } catch (e) {
       logger.error(`ERROR: Failed to grab entries for ${user_id} : ${e}`);
     }
@@ -176,11 +195,10 @@ class Handler implements Structure {
     const channel = await this.client.channels.fetch(this.threads_channel_id) as any;
     if (!channel) return;
 
-    const user_threads = channel.threads.cache.filter((thread: any) => {
-      return thread.name.includes(interaction.user.username)
-    });
-
-    const day = user_threads.size + 1;
+    const start_date = new Date(LOGISTICS.DATETIME_START.DATE);
+    const current_date = new Date();
+    const days_diff = Math.floor((current_date.getTime() - start_date.getTime()) / (1000 * 60 * 60 * 24));
+    const day = Math.max(1, days_diff + 1);
 
     const thread = await this.create(
       interaction.user.id,
