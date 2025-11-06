@@ -159,8 +159,6 @@ class EntryService implements Structure {
     }
     
     await thread.setName(`archive-${thread_name}`);
-    await thread.setLocked(true);
-    await thread.setArchived(true);
   }
 }
 

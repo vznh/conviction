@@ -192,6 +192,7 @@ class Controller implements Structure {
     this._setup_listeners(channel);
   }
 
+  // --------- PRIVATE -----------
   private _setup_listeners(channel: any): void {
     this.client.on("interactionCreate", async (interaction) => {
       if (interaction.isButton() && interaction.channelId === channel.id) {

@@ -122,9 +122,9 @@ class Handler implements Structure {
 
       const guild = await this.client.guilds.fetch(process.env.GUILD_ID || '');
       const member = await guild.members.fetch(user_id);
-      
+
       const embeds = await entry_service.create_entry_embeds(member);
-      
+
       for (const embed of embeds) {
         await thread.send({ embeds: [embed] });
       }
@@ -178,6 +178,7 @@ class Handler implements Structure {
     }
   }
 
+  // --------- PRIVATE -----------
   private _setup_listeners(channel: any): void {
     this.client.on('interactionCreate', async (interaction) => {
       if (!interaction.isButton() || interaction.channelId !== channel.id) return;
