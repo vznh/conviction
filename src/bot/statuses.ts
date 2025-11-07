@@ -42,15 +42,11 @@ class Status implements Structure {
     const pst = new Date(now.toLocaleString("en-US", {
       timeZone: "America/Los_Angeles"
     }));
-    // Format PST date as YYYY-MM-DD without timezone conversion
-    const td = pst.getFullYear() + '-' + 
-               String(pst.getMonth() + 1).padStart(2, '0') + '-' + 
+
+    const td = pst.getFullYear() + '-' +
+               String(pst.getMonth() + 1).padStart(2, '0') + '-' +
                String(pst.getDate()).padStart(2, '0');
-    const require_reset = this.last_reset !== td;
-    logger.debug("Times are set-up.");
-    logger.debug("Scanning all users.");
     await this.scan_all_users();
-    logger.debug("Users have been scanned.");
 
     await this._rebuild_statuses(td!);
     logger.info("Rebuilt statuses from existing threads.");
@@ -67,7 +63,6 @@ class Status implements Structure {
   async scan_all_users(): Promise<void> {
     const guild_id = process.env.GUILD_ID;
     if (!guild_id) {
-      logger.error("STATUS: GUILD_ID not configured");
       return;
     }
 
@@ -83,7 +78,7 @@ class Status implements Structure {
         }
       }
 
-      logger.info(`STATUS: Scanned ${members.size} users`);
+      logger.info(`Scanned ${members.size} users`);
     } catch (e) {
       logger.error(`STATUS: Failed to scan users: ${e}`);
     }
@@ -122,8 +117,7 @@ class Status implements Structure {
     const [year, month, day] = today.split('-');
     const today_formatted = `${month}-${day}-${year!.slice(2)}`;
 
-    logger.debug(`Rebuilding statuses from ${active_threads.size} threads`);
-
+    
     // reset to all NC first
     for (const [username] of this.user_statuses) {
       this.user_statuses.set(username, false);

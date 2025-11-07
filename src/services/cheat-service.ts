@@ -87,8 +87,6 @@ class CheatService implements Structure {
   }
 
   async handle_interaction(interaction: Interaction): Promise<void> {
-    logger.info(`CHEAT: Handling interaction, command: ${interaction.commandName}, type: ${interaction.type}`);
-
     if (!interaction.isChatInputCommand()) {
       logger.warn(`CHEAT: Not a chat input command`);
       return;
