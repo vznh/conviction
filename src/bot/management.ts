@@ -1,13 +1,21 @@
-import { Client, EmbedBuilder, GatewayIntentBits, REST, Routes } from "discord.js";
-import { Actions } from "@/bot/handler";
-import { Roles } from "@/bot/controller";
-import { entry_service } from "@/services/entry-service";
-import { Tracker } from "@/bot/statuses";
-import { Reminder } from "@/services/reminder-service";
+import {
+  Client,
+  EmbedBuilder,
+  REST,
+  Routes
+} from "discord.js";
+
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
 import { EMBEDS } from "@/constants/embeds";
+
+import { Actions } from "@/bot/handler";
+import { Roles } from "@/bot/controller";
+import { Tracker } from "@/bot/statuses";
+
+import { entry_service } from "@/services/entry-service";
+import { Reminder } from "@/services/reminder-service";
 
 interface Options {
   client: Client;
@@ -110,7 +118,7 @@ class Bot implements Structure {
 
       try {
         await rest.put(
-          Routes.applicationGuildCommands(this.client.user!.id, process.env.GUILD_ID!),
+          Routes.applicationCommands(this.client.user!.id),
           { body: commands }
         );
         logger.info('Registered slash commands');

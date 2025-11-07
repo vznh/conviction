@@ -1,7 +1,13 @@
-import { Client, SlashCommandBuilder, Interaction } from "discord.js";
-import { Tracker } from "@/bot/statuses";
+import {
+  Client,
+  Interaction,
+  SlashCommandBuilder,
+  MessageFlags
+} from "discord.js";
+
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
+import { Tracker } from "@/bot/statuses";
 
 interface Alarm {
   user_id: string;
@@ -52,7 +58,7 @@ class ReminderService implements Structure {
       }
     }
 
-    logger.info(`DEV: Loaded ${this.alarms.length} alarms`);
+    logger.info(`DEV: Loaded ${this.alarms.length} alarms.`);
   }
 
   async save_alarm(alarm: Alarm): Promise<void> {
@@ -149,12 +155,12 @@ CREATED: ${created}
       );
       await interaction.reply({
         content: `Reminder successfully set for ${time} PST.`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } catch (error) {
       await interaction.reply({
         content: `Reminder failed for setting at ${time}PST.\nDEV: ${error instanceof Error ? error.message : 'Failed'}`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
