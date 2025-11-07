@@ -169,7 +169,7 @@ class Handler implements Structure {
         .join('\n');
 
       try {
-        await user.send(`## Entries\n${entries}`);
+        await user.send(`##\n${entries}`);
       } catch (dm_error) {
         logger.error(`ERROR: Could not DM entries to user ${user_id}: ${dm_error}`);
       }

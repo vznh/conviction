@@ -1,8 +1,9 @@
-import { Client, EmbedBuilder, GatewayIntentBits } from "discord.js";
+import { Client, EmbedBuilder, GatewayIntentBits, REST, Routes } from "discord.js";
 import { Actions } from "@/bot/handler";
 import { Roles } from "@/bot/controller";
 import { entry_service } from "@/services/entry-service";
 import { Tracker } from "@/bot/statuses";
+import { Reminder } from "@/services/reminder-service";
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
 import { MESSAGES } from "@/constants/messages";
@@ -100,9 +101,22 @@ class Bot implements Structure {
   }
 
   setup() {
-    this.client.once('clientReady', () => {
+    this.client.once('clientReady', async () => {
       logger.info(`BOT: ${this.client.user?.tag}`);
       this.update(EMBEDS.STATUS.STARTUP);
+
+      const commands = [Reminder.get_command_definition()];
+      const rest = new REST({ version: '10' }).setToken(this.token);
+
+      try {
+        await rest.put(
+          Routes.applicationGuildCommands(this.client.user!.id, process.env.GUILD_ID!),
+          { body: commands }
+        );
+        logger.info('Registered slash commands');
+      } catch (error) {
+        logger.error(`Failed to register commands: ${error}`);
+      }
 
       Actions
         .setup()
@@ -122,9 +136,23 @@ class Bot implements Structure {
           logger.error(`Failed to set-up status tracker: ${e}`);
         })
 
+      Reminder
+        .load_alarms()
+        .catch((e: any) => {
+          logger.error(`Failed to load alarms: ${e}`);
+        });
+
+      Reminder.init_scheduler();
+
       this.client.on('messageCreate', async (message) => {
         if (message.author.bot) return;
         await entry_service.handle_reply(message, this.client);
+      });
+
+      this.client.on('interactionCreate', async (interaction) => {
+        if (interaction.isChatInputCommand()) {
+          await Reminder.handle_interaction(interaction);
+        }
       });
 
     });

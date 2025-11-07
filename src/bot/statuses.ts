@@ -12,6 +12,7 @@ interface Structure {
   setup(): Promise<void>;
   mark_completed(username: string): Promise<void>;
   scan_all_users(): Promise<void>;
+  get_user_status(username: string): boolean | undefined;
 }
 
 class Status implements Structure {
@@ -47,7 +48,6 @@ class Status implements Structure {
     await this.scan_all_users();
     logger.debug("Users have been scanned.");
 
-    // Always rebuild statuses from threads
     await this._rebuild_statuses(td!);
     logger.info("Rebuilt statuses from existing threads.");
 
@@ -85,40 +85,11 @@ class Status implements Structure {
     }
   }
 
-  // --------- PRIVATE -----------
-  private async _check_archived_for_today(today: string): Promise<boolean> {
-    const threads_channel_id = process.env.THREADS_CHANNEL_ID;
-    if (!threads_channel_id) return false;
-
-    const channel = await this.client.channels.fetch(threads_channel_id) as any;
-    if (!channel) return false;
-
-    await channel.threads.fetchActive();
-    const active_threads = channel.threads.cache;
-
-    const [year, month, day] = today.split('-');
-    const today_formatted = `${month}-${day}-${year!.slice(2)}`;
-
-    logger.debug(`Checking ${active_threads.size} threads for archives today (${today_formatted})`);
-
-    for (const [, thread] of active_threads) {
-      logger.debug(`Found thread: ${thread.name}`);
-      if (thread.name.startsWith('archive-')) {
-        const clean_name = thread.name.replace('archive-', '');
-        const match = clean_name.match(/day-(\d+)-([^-]+)-(.+)/);
-        if (match) {
-          const date_part = match[3];
-          logger.debug(`Archive thread found: ${thread.name}, date: ${date_part}`);
-          if (date_part === today_formatted) {
-            return true;
-          }
-        }
-      }
-    }
-
-    return false;
+  get_user_status(username: string): boolean | undefined {
+    return this.user_statuses.get(username);
   }
 
+  // --------- PRIVATE -----------
   private async _reset_statuses(today: string): Promise<void> {
     const users = Array.from(this.user_statuses.keys());
     this.user_statuses.clear();
@@ -144,13 +115,12 @@ class Status implements Structure {
     await channel.threads.fetchActive();
     const active_threads = channel.threads.cache;
 
-    // Parse today's date to compare with thread dates
     const [year, month, day] = today.split('-');
     const today_formatted = `${month}-${day}-${year!.slice(2)}`;
 
     logger.debug(`Rebuilding statuses from ${active_threads.size} threads`);
 
-    // Reset all users to not completed first
+    // reset to all NC first
     for (const [username] of this.user_statuses) {
       this.user_statuses.set(username, false);
     }
@@ -163,8 +133,7 @@ class Status implements Structure {
         const date_part = match[3];
         const completed = thread.name.startsWith('archive-');
 
-        // Update status for threads from today or any archived threads
-        if (date_part === today_formatted || completed) {
+        if (date_part === today_formatted) {
           this.user_statuses.set(username, completed);
           logger.debug(`Set ${username} status to ${completed ? 'completed' : 'not completed'} from thread ${thread.name}`);
         }
