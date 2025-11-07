@@ -21,7 +21,7 @@ class Status implements Structure {
   public statuses_channel_id!: string;
   public statuses_message_id?: string;
 
-  private user_statuses: Map<string, boolean> = new Map();
+  public user_statuses: Map<string, boolean> = new Map();
   private last_reset: string = '';
 
   constructor(options: Options) {
@@ -42,7 +42,10 @@ class Status implements Structure {
     const pst = new Date(now.toLocaleString("en-US", {
       timeZone: "America/Los_Angeles"
     }));
-    const td = pst.toISOString().split('T')[0];
+    // Format PST date as YYYY-MM-DD without timezone conversion
+    const td = pst.getFullYear() + '-' + 
+               String(pst.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(pst.getDate()).padStart(2, '0');
     const require_reset = this.last_reset !== td;
     logger.debug("Times are set-up.");
     logger.debug("Scanning all users.");
@@ -134,9 +137,13 @@ class Status implements Structure {
         const date_part = match[3];
         const completed = thread.name.startsWith('archive-');
 
+        logger.debug(`Processing thread: ${thread.name}, date_part: ${date_part}, today_formatted: ${today_formatted}, completed: ${completed}`);
+
         if (date_part === today_formatted) {
           this.user_statuses.set(username, completed);
-          logger.debug(`Set ${username} status to ${completed ? 'completed' : 'not completed'} from thread ${thread.name}`);
+          logger.info(`Set ${username} status to ${completed ? 'COMPLETED' : 'NOT COMPLETED'} from thread ${thread.name}`);
+        } else {
+          logger.debug(`Skipping thread ${thread.name} - date ${date_part} != today ${today_formatted}`);
         }
       }
     }

@@ -88,7 +88,7 @@ CREATED: ${created}
     }
 
     await this.save_alarm({ user_id, username, time, enabled: true });
-    logger.info(`Alarm set for ${username} at ${time}`);
+    logger.info(`Alarm set for ${username} at ${time}.`);
   }
 
   async check_and_send_reminders(): Promise<void> {
@@ -153,8 +153,18 @@ CREATED: ${created}
         interaction.user.username,
         time
       );
+
+      let response = `Reminder successfully set for ${time} PST.`;
+
+      const guild = await this.client.guilds.fetch(process.env.GUILD_ID!);
+      const member = await guild.members.fetch(interaction.user.id);
+
+      if (member.presence?.status === 'dnd') {
+        response += '\n\n#⚠️\nYour status is on DND. The bot won\'t send reminders while you\'re on DND.\nPlease disable DND if you want to receive reminders.';
+      }
+
       await interaction.reply({
-        content: `Reminder successfully set for ${time} PST.`,
+        content: response,
         flags: MessageFlags.Ephemeral
       });
     } catch (error) {
@@ -166,6 +176,6 @@ CREATED: ${created}
   }
 }
 
-const Reminder = new ReminderService(discord_client);
+const reminder_service = new ReminderService(discord_client);
 
-export { Reminder };
+export { reminder_service };

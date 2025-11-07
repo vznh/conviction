@@ -15,7 +15,8 @@ import { Roles } from "@/bot/controller";
 import { Tracker } from "@/bot/statuses";
 
 import { entry_service } from "@/services/entry-service";
-import { Reminder } from "@/services/reminder-service";
+import { reminder_service } from "@/services/reminder-service";
+import { cheat_service } from "@/services/cheat-service";
 
 interface Options {
   client: Client;
@@ -113,44 +114,52 @@ class Bot implements Structure {
       logger.info(`BOT: ${this.client.user?.tag}`);
       this.update(EMBEDS.STATUS.STARTUP);
 
-      const commands = [Reminder.get_command_definition()];
+      const commands = [reminder_service.get_command_definition(), cheat_service.get_command_definition()];
       const rest = new REST({ version: '10' }).setToken(this.token);
+
+      logger.info(`DEV: Registering commands: ${commands.map(c => c.name).join(', ')}`);
 
       try {
         await rest.put(
           Routes.applicationCommands(this.client.user!.id),
           { body: commands }
         );
-        logger.info('Registered slash commands');
+        logger.info('DEV: Registered slash commands');
       } catch (error) {
-        logger.error(`Failed to register commands: ${error}`);
+        logger.error(`DEV: Failed to register commands: ${error}`);
       }
 
       Actions
         .setup()
         .catch((e: any) => {
-          logger.error(`Failed to set-up handler: ${e}`);
+          logger.error(`ACTIONS: Failed to set-up handler: ${e}.`);
         });
 
       Roles
         .setup()
         .catch((e: any) => {
-          logger.error(`Failed to set-up controller: ${e}`);
+          logger.error(`ROLES: Failed to set-up controller: ${e}.`);
         })
 
       Tracker
         .setup()
         .catch((e: any) => {
-          logger.error(`Failed to set-up status tracker: ${e}`);
+          logger.error(`TRACKER: Failed to set-up status tracker: ${e}.`);
         })
 
-      Reminder
+      reminder_service
         .load_alarms()
         .catch((e: any) => {
-          logger.error(`Failed to load alarms: ${e}`);
+          logger.error(`REMINDER: Failed to load alarms: ${e}.`);
         });
 
-      Reminder.init_scheduler();
+      reminder_service.init_scheduler();
+
+      cheat_service
+        .setup()
+        .catch((e: any) => {
+          logger.error(`DEV: Failed to set-up cheat service: ${e}.`);
+        });
 
       this.client.on('messageCreate', async (message) => {
         if (message.author.bot) return;
@@ -158,8 +167,18 @@ class Bot implements Structure {
       });
 
       this.client.on('interactionCreate', async (interaction) => {
+        logger.debug(`DEV: Received interaction: ${interaction.type}`);
+        
         if (interaction.isChatInputCommand()) {
-          await Reminder.handle_interaction(interaction);
+          logger.info(`DEV: Received command: ${interaction.commandName}`);
+          
+          if (interaction.commandName === 'reminder') {
+            await reminder_service.handle_interaction(interaction);
+          } else if (interaction.commandName === 'cheat') {
+            await cheat_service.handle_interaction(interaction);
+          } else {
+            logger.warn(`DEV: Unknown command: ${interaction.commandName}`);
+          }
         }
       });
 
