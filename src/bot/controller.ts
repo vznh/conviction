@@ -159,10 +159,6 @@ class Controller implements Structure {
         .setCustomId("create_role")
         .setLabel("Create a role")
         .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId("select_role")
-        .setLabel("Select a role")
-        .setStyle(ButtonStyle.Primary),
     );
 
     if (this.marketplace_message_id) {

@@ -88,34 +88,34 @@ class CheatService implements Structure {
 
   async handle_interaction(interaction: Interaction): Promise<void> {
     if (!interaction.isChatInputCommand()) {
-      logger.warn(`CHEAT: Not a chat input command`);
+      logger.debug(`Not a chat input command`);
       return;
     }
     if (interaction.commandName !== 'cheat') {
-      logger.warn(`CHEAT: Wrong command name: ${interaction.commandName}`);
+      logger.debug(`Wrong command name: ${interaction.commandName}`);
       return;
     }
 
-    logger.info(`CHEAT: Processing cheat command for user: ${interaction.user.username}`);
+    logger.debug(`Processing cheat command for user: ${interaction.user.username}`);
 
     try {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       logger.debug(`CHEAT: Deferred reply for ${interaction.user.username}`);
     } catch (e) {
-      logger.error(`CHEAT: Failed to defer reply: ${e}`);
+      logger.error(`Failed to defer reply: ${e}`);
       return;
     }
 
     const subcommand = interaction.options.getSubcommand();
     const username = interaction.user.username;
 
-    logger.info(`CHEAT: Subcommand: ${subcommand}, Username: ${username}`);
+    logger.debug(`Subcommand: ${subcommand}, Username: ${username}`);
 
     try {
       if (subcommand === 'use') {
-        logger.info(`CHEAT: Processing 'use' subcommand for ${username}`);
+    logger.info(`Processing 'use' subcommand for ${username}`);
         const success = await this.use_cheat_day(username);
-        logger.info(`CHEAT: Cheat day use result: ${success}`);
+    logger.debug(`Cheat day use result: ${success}`);
 
         if (success) {
           await this._create_cheat_day_thread(interaction.user.id, username);
@@ -125,32 +125,32 @@ class CheatService implements Structure {
           await interaction.editReply({
             content: `**Cheat day was successfully used.**\nYou have ${remaining} cheat day(s) remaining.`
           });
-          logger.info(`CHEAT: Successfully responded to ${username} with cheat day use confirmation`);
+      logger.debug(`Successfully responded to ${username} with cheat day use confirmation`);
         } else {
           await interaction.editReply({
             content: `**You have no cheat days available.**`
           });
-          logger.info(`CHEAT: Informed ${username} they have no cheat days`);
+      logger.debug(`Informed ${username} they have no cheat days`);
         }
       } else if (subcommand === 'status') {
-        logger.info(`CHEAT: Processing 'status' subcommand for ${username}`);
+    logger.debug(`Processing 'status' subcommand for ${username}`);
         const available = await this.get_cheat_days(username);
         await interaction.editReply({
           content: `You have ${available} cheat day(s) available.`
         });
-        logger.info(`CHEAT: Successfully responded to ${username} with status: ${available} cheat days`);
+      logger.debug(`Successfully responded to ${username} with status: ${available} cheat days`);
       } else {
-        logger.warn(`CHEAT: Unknown subcommand: ${subcommand}`);
+        logger.warn(`Unknown subcommand: ${subcommand}`);
       }
     } catch (e) {
-      logger.error(`CHEAT: Error handling interaction: ${e}`);
+      logger.error(`Error handling interaction: ${e}`);
       if (!interaction.replied) {
         try {
           await interaction.editReply({
             content: `**An error occurred while processing your request.**`
           });
         } catch (editError) {
-          logger.error(`CHEAT: Failed to edit reply after error: ${editError}`);
+          logger.error(`Failed to edit reply after error: ${editError}`);
         }
       }
     }
@@ -158,10 +158,10 @@ class CheatService implements Structure {
 
   // --------- PRIVATE -----------
   private async _load_cheat_days(): Promise<void> {
-    logger.info("CHEAT: Loading cheat days from reference channel");
+    logger.debug("Loading cheat days from reference channel");
     const channel = await this.client.channels.fetch(this.cheat_day_ref_channel_id) as any;
     if (!channel) {
-      logger.error("CHEAT: Couldn't fetch cheat day channel.");
+      logger.error("Could not fetch cheat day channel.");
       return;
     }
 
@@ -170,7 +170,7 @@ class CheatService implements Structure {
       const cheat = messages.find((m: any) => m.author.bot && m.content.includes(":"));
 
       if (!cheat) {
-        logger.info("CHEAT: No existing cheat day message found. Initializing all users with 3 cheat days.");
+      logger.info("No existing cheat day message found. Initializing all users with 3 cheat days.");
         await this._initialize_all_users();
       } else {
         this.cheat_day_ref_message_id = cheat.id;
@@ -185,17 +185,17 @@ class CheatService implements Structure {
             this.cheat_days.set(username, { username, available });
           }
         }
-        logger.info(`CHEAT: Loaded ${this.cheat_days.size} user cheat day records.`);
+      logger.debug(`Loaded ${this.cheat_days.size} user cheat day records.`);
       }
     } catch (e) {
-      logger.error(`CHEAT: Failed to load cheat days: ${e}`);
-      logger.error(`CHEAT: Error details: ${JSON.stringify(e)}`);
+      logger.error(`Failed to load cheat days: ${e}`);
+      logger.error(`Error details: ${JSON.stringify(e)}`);
     }
   }
 
   private async _initialize_all_users(): Promise<void> {
     try {
-      const tracked_users = Array.from(Tracker.user_statuses.keys());
+      const tracked_users = Array.from(Tracker.tracking.user_statuses.keys());
 
       for (const username of tracked_users) {
         if (!this.cheat_days.has(username)) {
@@ -206,21 +206,21 @@ class CheatService implements Structure {
         }
       }
 
-      logger.info(`CHEAT: Initialized ${this.cheat_days.size} users with 3 cheat days each using Tracker cache.`);
+      logger.debug(`Initialized ${this.cheat_days.size} users with 3 cheat days each using Tracker cache.`);
     } catch (e) {
-      logger.error(`CHEAT: Failed to initialize users from Tracker: ${e}`);
+      logger.error(`Failed to initialize users from Tracker: ${e}`);
     }
   }
 
   private async _update_ref_message(): Promise<void> {
     if (!this.cheat_day_ref_channel_id) {
-      logger.error("CHEAT: No cheat day ref channel ID configured.");
+      logger.warn("No cheat day ref channel ID configured.");
       return;
     }
 
     const channel = await this.client.channels.fetch(this.cheat_day_ref_channel_id) as any;
     if (!channel) {
-      logger.error(`CHEAT: Could not fetch channel ${this.cheat_day_ref_channel_id}.`);
+      logger.error(`Could not fetch channel ${this.cheat_day_ref_channel_id}.`);
       return;
     }
 
@@ -235,25 +235,25 @@ class CheatService implements Structure {
         const message = await channel.messages.fetch(this.cheat_day_ref_message_id);
         await message.edit(content);
       } catch (e) {
-        logger.error(`CHEAT: Failed to update ref message: ${e}.`);
+        logger.error(`Failed to update ref message: ${e}.`);
         const message = await channel.send(content);
         this.cheat_day_ref_message_id = message.id;
       }
     } else {
       if (!content || content.trim() === '') {
-        logger.error("CHEAT: Cannot send empty message content");
+        logger.error("Cannot send empty message content.");
         return;
       }
       const message = await channel.send(content);
       this.cheat_day_ref_message_id = message.id;
-      logger.info(`CHEAT: Sent initial cheat day message with ID ${message.id}`);
+      logger.debug(`Sent initial cheat day message with ID ${message.id}`);
     }
   }
 
   private async _create_cheat_day_thread(user_id: string, username: string): Promise<void> {
     const threads_channel_id = process.env.THREADS_CHANNEL_ID;
     if (!threads_channel_id) {
-      logger.error("CHEAT: THREADS_CHANNEL_ID not configured. I can't create a thread.");
+      logger.error("THREADS_CHANNEL_ID not configured. Cannot create thread.");
       return;
     }
 
@@ -294,9 +294,9 @@ class CheatService implements Structure {
 
       await thread.send(`## CHEAT DAY WAS USED — ${date_str}`);
 
-      logger.info(`CHEAT: Created cheat day thread for ${username} with day ${day}.`);
+      logger.info(`Created cheat day thread for ${username} with day ${day}.`);
     } catch (e) {
-      logger.error(`CHEAT: Failed to create cheat day thread: ${e}.`);
+      logger.error(`Failed to create cheat day thread: ${e}.`);
     }
   }
 

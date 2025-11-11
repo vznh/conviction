@@ -48,7 +48,7 @@ class Bot implements Structure {
       Object.keys(options).length !== 4 || // place amt of required keys here
       Object.keys(options).length === 0
     ) {
-      logger.fatal("DEV: Bot was not instantiated with all of the correct variables.");
+      logger.fatal("Bot was not instantiated with all of the correct variables.");
     }
 
     Object.assign(this, options);
@@ -88,7 +88,7 @@ class Bot implements Structure {
     try {
       const channel = await this.client.channels.fetch(this.status_channel_id) as any;
       if (!channel) {
-        logger.error("DEV: No channel was found or bot lacks permissions.");
+        logger.error("No channel was found or bot lacks permissions.");
         return;
       }
 
@@ -111,7 +111,7 @@ class Bot implements Structure {
 
   setup() {
     this.client.once('clientReady', async () => {
-      logger.info(`BOT: ${this.client.user?.tag}`);
+      logger.info(`Logged in as ${this.client.user?.tag}`);
       this.update(EMBEDS.STATUS.STARTUP);
 
       const commands = [reminder_service.get_command_definition(), cheat_service.get_command_definition()];
@@ -126,7 +126,7 @@ class Bot implements Structure {
         );
         logger.info('DEV: Registered slash commands');
       } catch (error) {
-        logger.error(`DEV: Failed to register commands: ${error}`);
+        logger.error(`Failed to register commands: ${error}`);
       }
 
       Actions
@@ -158,7 +158,7 @@ class Bot implements Structure {
       cheat_service
         .setup()
         .catch((e: any) => {
-          logger.error(`DEV: Failed to set-up cheat service: ${e}.`);
+          logger.error(`Failed to set up cheat service: ${e}`);
         });
 
       this.client.on('messageCreate', async (message) => {
@@ -177,7 +177,7 @@ class Bot implements Structure {
           } else if (interaction.commandName === 'cheat') {
             await cheat_service.handle_interaction(interaction);
           } else {
-            logger.warn(`DEV: Unknown command: ${interaction.commandName}`);
+            logger.warn(`Unknown command: ${interaction.commandName}`);
           }
         }
       });
@@ -188,11 +188,11 @@ class Bot implements Structure {
     process.on('SIGTERM', () => this.shutdown());
     process.on('SIGUSR2', () => this.shutdown());
     process.on('uncaughtException', (e) => {
-      logger.fatal(`DEV: Uncaught exception. ${e}`);
+      logger.fatal(`Uncaught exception: ${e}`);
       this.shutdown();
     })
     process.on('unhandledRejection', (reason, promise) => {
-      logger.fatal(`DEV: Unhandled exception at ${promise}: ${reason}`);
+      logger.fatal(`Unhandled exception at ${promise}: ${reason}`);
       this.shutdown();
     });
   }

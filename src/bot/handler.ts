@@ -41,7 +41,7 @@ class Handler implements Structure {
       !options.client ||
       !options.threads_channel_id
     ) {
-      logger.fatal("DEV: Thread handler was not instantiated correctly.");
+      logger.fatal("Thread handler was not instantiated correctly.");
     }
 
     Object.assign(this, options);
@@ -96,7 +96,7 @@ class Handler implements Structure {
     try {
       const channel = await this.client.channels.fetch(this.threads_channel_id) as any;
       if (!channel) {
-        logger.error("DEV: Threads channel can't be found.");
+        logger.error("Threads channel cannot be found.");
         return null;
       }
 
@@ -132,7 +132,7 @@ class Handler implements Structure {
       logger.info(`DEV: Created thread: ${name} for ${username}.`);
       return thread;
     } catch (e) {
-      logger.error(`DEV: Failed to create thread. ${e}`);
+      logger.error(`Failed to create thread: ${e}`);
       return null;
     }
   }

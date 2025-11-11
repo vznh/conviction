@@ -15,7 +15,7 @@ interface Structure {
 class EntryService implements Structure {
   constructor(options: Options) {
     if (options === null || Object.keys(options).length !== 0) {
-      logger.fatal("DEV: EntryService was not instantiated correctly.");
+      logger.fatal("EntryService was not instantiated correctly.");
     }
   }
 
