@@ -2,6 +2,7 @@ import { Client } from "discord.js";
 
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
+import { LOGISTICS } from "@/constants/logistics";
 
 interface Options {
   client: Client;
@@ -304,7 +305,7 @@ class Status implements Structure {
   }
 
   private _get_current_day(): number {
-    const start_date = new Date("10/06/2025");
+    const start_date = new Date(LOGISTICS.DATETIME_START.DATE);
     const current_date = new Date();
     const days_diff = Math.floor((current_date.getTime() - start_date.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(1, days_diff + 1);
@@ -313,7 +314,6 @@ class Status implements Structure {
   private guild_members_cache: Map<string, any> = new Map();
   private missing_members: Set<string> = new Set();
   private member_cache_built: boolean = false;
-  private day_completion_debug: Map<number, string[]> = new Map();
 
   private async _build_history_from_channel(
     channel_id: string,
@@ -413,13 +413,6 @@ class Status implements Structure {
       this.missing_members.clear();
     }
 
-    // Debug: Print day completion summary
-    for (let day = 1; day <= this._get_current_day(); day++) {
-      if (this.day_completion_debug.has(day)) {
-        const users = this.day_completion_debug.get(day)!;
-        logger.info(`day ${day} loaded - (${users.join('\n')})`);
-      }
-    }
   }
 
   private async _build_member_cache(): Promise<void> {
@@ -498,11 +491,6 @@ class Status implements Structure {
 
         const history = this.tracking.user_histories.get(display_name)!;
         history[day_num - 1] = this._get_day_character(day_num);
-
-        if (!this.day_completion_debug.has(day_num)) {
-          this.day_completion_debug.set(day_num, []);
-        }
-        this.day_completion_debug.get(day_num)!.push(display_name);
       } else {
         this.missing_members.add(extracted_username);
       }
@@ -586,9 +574,6 @@ class Status implements Structure {
 
     const content = lines.join('\n');
 
-    // Debug: Print what we're about to send
-    logger.info(`History message length: ${content.length}/2000`);
-    logger.debug(`History content preview:\n${content.substring(0, 2000)}...`);
 
     if (this.channels.history_message_id) {
       try {
