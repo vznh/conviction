@@ -25,5 +25,11 @@ export const EMBEDS = {
       .setTitle('🤖')
       .setDescription('Bot is running functionally.')
       .setTimestamp(),
+
+    DELETE_THREAD: new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('🧱')
+      .setDescription('Use this if the bot is acting up.')
+      .setTimestamp(),
   },
 } as const;

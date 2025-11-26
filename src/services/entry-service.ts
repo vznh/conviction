@@ -152,12 +152,12 @@ class EntryService implements Structure {
   private async _archive_thread(thread: any) {
     const thread_name = thread.name;
     const match = thread_name.match(/day-\d+-([^-]+)-/);
-    
+
     if (match) {
       const username = match[1];
       await Tracker.mark_completed(username);
     }
-    
+
     await thread.setName(`archive-${thread_name}`);
   }
 }

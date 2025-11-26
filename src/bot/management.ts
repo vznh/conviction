@@ -1,9 +1,4 @@
-import {
-  Client,
-  EmbedBuilder,
-  REST,
-  Routes
-} from "discord.js";
+import { Client, EmbedBuilder, REST, Routes } from "discord.js";
 
 import { logger } from "@/lib/logger";
 import { discord_client } from "@/lib/client";
@@ -15,8 +10,6 @@ import { Roles } from "@/bot/controller";
 import { Tracker } from "@/bot/statuses";
 
 import { entry_service } from "@/services/entry-service";
-import { reminder_service } from "@/services/reminder-service";
-import { cheat_service } from "@/services/cheat-service";
 
 interface Options {
   client: Client;
@@ -24,7 +17,6 @@ interface Options {
 
   status_channel_id: string;
   status_message_id?: string;
-
 }
 
 interface Structure {
@@ -41,14 +33,15 @@ class Bot implements Structure {
   public status_channel_id!: string;
   public status_message_id?: string;
 
-
   constructor(options: Options) {
     if (
       options === null ||
       Object.keys(options).length !== 4 || // place amt of required keys here
       Object.keys(options).length === 0
     ) {
-      logger.fatal("Bot was not instantiated with all of the correct variables.");
+      logger.fatal(
+        "DEV: Bot was not instantiated with all of the correct variables.",
+      );
     }
 
     Object.assign(this, options);
@@ -86,9 +79,11 @@ class Bot implements Structure {
     }
 
     try {
-      const channel = await this.client.channels.fetch(this.status_channel_id) as any;
+      const channel = (await this.client.channels.fetch(
+        this.status_channel_id,
+      )) as any;
       if (!channel) {
-        logger.error("No channel was found or bot lacks permissions.");
+        logger.error("DEV: No channel was found or bot lacks permissions.");
         return;
       }
 
@@ -110,89 +105,52 @@ class Bot implements Structure {
   }
 
   setup() {
-    this.client.once('clientReady', async () => {
-      logger.info(`Logged in as ${this.client.user?.tag}`);
+    this.client.once("clientReady", async () => {
+      logger.info(`BOT: ${this.client.user?.tag}`);
       this.update(EMBEDS.STATUS.STARTUP);
 
-      const commands = [reminder_service.get_command_definition(), cheat_service.get_command_definition()];
-      const rest = new REST({ version: '10' }).setToken(this.token);
+      const commands = [];
+      const rest = new REST({ version: "10" }).setToken(this.token);
 
-      logger.info(`DEV: Registering commands: ${commands.map(c => c.name).join(', ')}`);
+      Actions.setup().catch((e: any) => {
+        logger.error(`ACTIONS: handler: ${e}.`);
+      });
 
-      try {
-        await rest.put(
-          Routes.applicationCommands(this.client.user!.id),
-          { body: commands }
-        );
-        logger.info('DEV: Registered slash commands');
-      } catch (error) {
-        logger.error(`Failed to register commands: ${error}`);
-      }
+      Roles.setup().catch((e: any) => {
+        logger.error(`ROLES: Failed to set-up controller: ${e}.`);
+      });
 
-      Actions
-        .setup()
-        .catch((e: any) => {
-          logger.error(`ACTIONS: Failed to set-up handler: ${e}.`);
-        });
+      Tracker.setup().catch((e: any) => {
+        logger.error(`TRACKER: Failed to set-up status tracker: ${e}.`);
+      });
 
-      Roles
-        .setup()
-        .catch((e: any) => {
-          logger.error(`ROLES: Failed to set-up controller: ${e}.`);
-        })
 
-      Tracker
-        .setup()
-        .catch((e: any) => {
-          logger.error(`TRACKER: Failed to set-up status tracker: ${e}.`);
-        })
-
-      reminder_service
-        .load_alarms()
-        .catch((e: any) => {
-          logger.error(`REMINDER: Failed to load alarms: ${e}.`);
-        });
-
-      reminder_service.init_scheduler();
-
-      cheat_service
-        .setup()
-        .catch((e: any) => {
-          logger.error(`Failed to set up cheat service: ${e}`);
-        });
-
-      this.client.on('messageCreate', async (message) => {
+      this.client.on("messageCreate", async (message) => {
         if (message.author.bot) return;
         await entry_service.handle_reply(message, this.client);
       });
 
-      this.client.on('interactionCreate', async (interaction) => {
-        logger.debug(`DEV: Received interaction: ${interaction.type}`);
-        
+      this.client.on("interactionCreate", async (interaction) => {
         if (interaction.isChatInputCommand()) {
           logger.info(`DEV: Received command: ${interaction.commandName}`);
-          
-          if (interaction.commandName === 'reminder') {
-            await reminder_service.handle_interaction(interaction);
-          } else if (interaction.commandName === 'cheat') {
-            await cheat_service.handle_interaction(interaction);
+
+          if (false) { // No slash commands enabled
           } else {
-            logger.warn(`Unknown command: ${interaction.commandName}`);
+            logger.warn(`DEV: Unknown command: ${interaction.commandName}`);
           }
         }
       });
-
     });
 
-    process.on('SIGINT', () => this.shutdown());
-    process.on('SIGTERM', () => this.shutdown());
-    process.on('SIGUSR2', () => this.shutdown());
-    process.on('uncaughtException', (e) => {
-      logger.fatal(`Uncaught exception: ${e}`);
+    process.on("SIGINT", () => this.shutdown());
+    process.on("SIGTERM", () => this.shutdown());
+    process.on("SIGUSR2", () => this.shutdown());
+    process.on("uncaughtException", (e) => {
+      logger.fatal(`DEV: Uncaught exception. ${e}`);
       this.shutdown();
-    })
-    process.on('unhandledRejection', (reason, promise) => {
-      logger.fatal(`Unhandled exception at ${promise}: ${reason}`);
+    });
+    process.on("unhandledRejection", (reason, promise) => {
+      logger.fatal(`DEV: Unhandled exception at ${promise}: ${reason}`);
       this.shutdown();
     });
   }
@@ -205,4 +163,4 @@ const Manager = new Bot({
   status_message_id: process.env.BOT_STATUS_MESSAGE_ID || "",
 });
 
-export { Manager }
+export { Manager };

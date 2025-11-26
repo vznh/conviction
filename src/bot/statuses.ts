@@ -8,6 +8,7 @@ interface Options {
   statuses_channel_id: string;
   statuses_message_id?: string;
   history_message_id?: string;
+  reminder_message_id?: string;
 }
 
 interface Structure {
@@ -23,6 +24,7 @@ class Status implements Structure {
     statuses_id: string;
     statuses_message_id?: string;
     history_message_id?: string;
+    reminder_message_id?: string;
   } = { statuses_id: "" };
 
   public tracking: {
@@ -48,6 +50,7 @@ class Status implements Structure {
     this.channels.statuses_id = options.statuses_channel_id;
     this.channels.statuses_message_id = options.statuses_message_id;
     this.channels.history_message_id = options.history_message_id;
+    this.channels.reminder_message_id = options.reminder_message_id;
   }
 
   async setup(): Promise<void> {
@@ -71,6 +74,7 @@ class Status implements Structure {
     logger.info("Completed building history.");
 
     this._check_schedule();
+    logger.info("Default alarms are loaded.");
     logger.info("Tracker was set up correctly.");
   }
 
@@ -130,43 +134,78 @@ class Status implements Structure {
     await this._update_status_message();
   }
 
-  private async _rebuild_statuses(today: string): Promise<void> {
-    const threads_channel_id = process.env.THREADS_CHANNEL_ID;
-    if (!threads_channel_id) {
-      logger.warn("THREADS_CHANNEL_ID not configured.");
-      return;
-    }
-
-    const channel = await this.client.channels.fetch(threads_channel_id) as any;
+  private async _process_status_threads(
+    channel_id: string,
+    pattern: RegExp,
+    is_old_pattern: boolean,
+    today_formatted: string
+  ): Promise<void> {
+    const channel = await this.client.channels.fetch(channel_id) as any;
     if (!channel) return;
 
     await channel.threads.fetchActive();
     const active_threads = channel.threads.cache;
 
+    for (const [, thread] of active_threads) {
+      const clean_name = thread.name.replace('archive-', '');
+      const match = clean_name.match(pattern);
+
+      if (match) {
+        let day_num: number;
+        let username: string;
+
+        if (is_old_pattern) {
+          // Old pattern: {server_username}-day-{day_number}
+          day_num = parseInt(match[2]);
+          username = match[1];
+        } else {
+          // New pattern: day-{day_number}-{username}-{date}
+          day_num = parseInt(match[1]);
+          username = match[2];
+        }
+
+        const completed = thread.name.startsWith('archive-');
+
+        if (day_num === this._get_current_day()) {
+          this.tracking.user_statuses.set(username, completed);
+        }
+      }
+    }
+  }
+
+  private async _rebuild_statuses(today: string): Promise<void> {
+    const deprecated_channel_id = process.env.DEPRECATED_THREADS_CHANNEL_ID;
+    const threads_channel_id = process.env.THREADS_CHANNEL_ID;
+
+    if (!threads_channel_id) {
+      logger.warn("THREADS_CHANNEL_ID not configured.");
+      return;
+    }
+
     const [year, month, day] = today.split('-');
     const today_formatted = `${month}-${day}-${year!.slice(2)}`;
-
 
     // reset to all NC first
     for (const [username] of this.tracking.user_statuses) {
       this.tracking.user_statuses.set(username, false);
     }
 
-    for (const [, thread] of active_threads) {
-      const clean_name = thread.name.replace('archive-', '');
-      const match = clean_name.match(/day-(\d+)-([^-]+)-(.+)/);
-      if (match) {
-        const username = match[2];
-        const date_part = match[3];
-        const completed = thread.name.startsWith('archive-');
+    // Process new pattern threads
+    await this._process_status_threads(
+      threads_channel_id,
+      /day-(\d+)-([^-]+)-\d{1,2}-\d{1,2}-\d{2}/,
+      false,
+      today_formatted
+    );
 
-
-        if (date_part === today_formatted) {
-          this.tracking.user_statuses.set(username, completed);
-          logger.debug(`Set ${username} status to ${completed ? 'COMPLETED' : 'NOT COMPLETED'} from thread ${thread.name}`);
-        } else {
-        }
-      }
+    // Process old pattern threads if deprecated channel exists
+    if (deprecated_channel_id) {
+      await this._process_status_threads(
+        deprecated_channel_id,
+        /([^-]+)-entry-day-(\d+)/,
+        true,
+        today_formatted
+      );
     }
 
     this.tracking.last_reset = today;
@@ -197,6 +236,9 @@ class Status implements Structure {
         await this._update_history_message();
         logger.info("Updated history at 11:59 PM.");
       }
+
+      // Check for entry reminders
+      await this._check_reminders();
     }, 60000);
   }
 
@@ -262,125 +304,214 @@ class Status implements Structure {
   }
 
   private _get_current_day(): number {
-    const start_date = new Date("10/04/2025");
+    const start_date = new Date("10/06/2025");
     const current_date = new Date();
     const days_diff = Math.floor((current_date.getTime() - start_date.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(1, days_diff + 1);
   }
 
   private guild_members_cache: Map<string, any> = new Map();
+  private missing_members: Set<string> = new Set();
+  private member_cache_built: boolean = false;
+  private day_completion_debug: Map<number, string[]> = new Map();
 
-  private async _build_history_from_threads(): Promise<void> {
-    const threads_channel_id = process.env.THREADS_CHANNEL_ID;
-    if (!threads_channel_id) return;
-
-    const channel = await this.client.channels.fetch(threads_channel_id) as any;
+  private async _build_history_from_channel(
+    channel_id: string,
+    pattern: RegExp,
+    is_old_pattern: boolean,
+    current_day: number
+  ): Promise<void> {
+    const channel = await this.client.channels.fetch(channel_id) as any;
     if (!channel) return;
-
-    await this._build_member_cache();
-
-    for (const [username] of this.tracking.user_statuses) {
-      const history = new Array(75).fill('x');
-      this.tracking.user_histories.set(username, history);
-    }
-
-    const current_day = this._get_current_day();
 
     await channel.threads.fetchActive();
     const active_threads = channel.threads.cache;
 
     for (const [, thread] of active_threads) {
-      await this._process_thread_for_history(thread, current_day);
+      await this._process_thread_for_history_with_pattern(thread, pattern, is_old_pattern, current_day);
     }
 
-    const fetch_type = process.env.NODE_ENV === 'development' ? 'public' : 'private';
-    let has_more = true;
-    let before: any = null;
+    const fetch_types = ['public', 'private'];
+    for (const fetch_type of fetch_types) {
+      let has_more = true;
+      let before: any = null;
 
-    while (has_more) {
-      const archived = await channel.threads.fetchArchived({
-        limit: 100,
-        type: fetch_type,
-        before
-      });
+      while (has_more) {
+        try {
+          const archived = await channel.threads.fetchArchived({
+            limit: 100,
+            type: fetch_type,
+            before
+          });
 
-      for (const [, thread] of archived.threads) {
-        await this._process_thread_for_history(thread, current_day);
+          for (const [, thread] of archived.threads) {
+            await this._process_thread_for_history_with_pattern(thread, pattern, is_old_pattern, current_day);
+          }
+
+          has_more = archived.hasMore;
+          before = archived.threads.last()?.id;
+        } catch (e) {
+          logger.warn(`Failed to fetch ${fetch_type} archived threads: ${e}`);
+          break;
+        }
       }
+    }
+  }
 
-      has_more = archived.hasMore;
-      before = archived.threads.last()?.id;
+  private async _build_history_from_threads(): Promise<void> {
+    const deprecated_channel_id = process.env.DEPRECATED_THREADS_CHANNEL_ID;
+    const threads_channel_id = process.env.THREADS_CHANNEL_ID;
+
+    if (!threads_channel_id) return;
+
+    await this._build_member_cache();
+
+    // Create histories based on display names from member cache
+    for (const [key, member] of this.guild_members_cache) {
+      if (member.user.bot) continue; // Skip bots
+
+      const display_name = member.displayName || member.user.username;
+      if (!this.tracking.user_histories.has(display_name)) {
+        const history = new Array(75).fill('x');
+        this.tracking.user_histories.set(display_name, history);
+      }
+    }
+
+    const current_day = this._get_current_day();
+
+    // Hardcode days 1-22 as completed for all users
+    for (const [display_name] of this.tracking.user_histories) {
+      for (let day = 1; day <= 22; day++) {
+        const history = this.tracking.user_histories.get(display_name)!;
+        if (history && history.length > day - 1) {
+          history[day - 1] = this._get_day_character(day);
+        }
+      }
+    }
+    logger.info("Hardcoded days 1-22 as completed for all users");
+
+    // Process new pattern threads (days 23+)
+    await this._build_history_from_channel(
+      threads_channel_id,
+      /day-(\d+)-([^-]+)-\d{1,2}-\d{1,2}-\d{2}/,
+      false,
+      current_day
+    );
+
+    // Process old pattern threads if deprecated channel exists
+    if (deprecated_channel_id) {
+      await this._build_history_from_channel(
+        deprecated_channel_id,
+        /([^-]+)-entry-day-(\d+)/,
+        true,
+        current_day
+      );
+    }
+
+    if (this.missing_members.size > 0) {
+      logger.info(`Could not find ${this.missing_members.size} members: ${Array.from(this.missing_members).join(', ')}`);
+      this.missing_members.clear();
+    }
+
+    // Debug: Print day completion summary
+    for (let day = 1; day <= this._get_current_day(); day++) {
+      if (this.day_completion_debug.has(day)) {
+        const users = this.day_completion_debug.get(day)!;
+        logger.info(`day ${day} loaded - (${users.join('\n')})`);
+      }
     }
   }
 
   private async _build_member_cache(): Promise<void> {
+    if (this.member_cache_built) return;
+
     try {
       const guild = await this.client.guilds.fetch(process.env.GUILD_ID || '');
       if (!guild) return;
 
-      const members = await guild.members.fetch();
+      let members;
+      try {
+        members = await guild.members.fetch({ limit: 1000 });
+      } catch (fetch_error) {
+        logger.warn(`Full member fetch failed, trying with limit: ${fetch_error}`);
+        members = await guild.members.fetch({ limit: 100 });
+      }
+
       for (const [, member] of members) {
         this.guild_members_cache.set(member.user.username, member);
         this.guild_members_cache.set(member.displayName, member);
       }
+      this.member_cache_built = true;
       logger.info(`Cached ${members.size} guild members.`);
     } catch (e) {
       logger.error(`Failed to build member cache: ${e}`);
     }
   }
 
-  private async _process_thread_for_history(thread: any, current_day: number): Promise<void> {
+  private async _process_thread_for_history_with_pattern(
+    thread: any,
+    pattern: RegExp,
+    is_old_pattern: boolean,
+    current_day: number
+  ): Promise<void> {
     const clean_name = thread.name.replace('archive-', '');
-
-    let match = clean_name.match(/day-(\d+)-([^-]+)-(.+)/);
-    let is_old_pattern = false;
-
-    if (!match) {
-      match = clean_name.match(/([^-]+)-day-(\d+)/);
-      if (match) {
-        // Old pattern: {server_username}-day-{day_number}
-        is_old_pattern = true;
-        // Swap groups for consistency: [null, day, username]
-        match = [null, match[2], match[1], null];
-      }
-    } else {
-    }
+    const match = clean_name.match(pattern);
 
     if (match) {
-      const day_num = parseInt(match[1]);
-      let username = match[2];
-      let original_extracted = username;
+      let day_num: number;
+      let extracted_username: string;
+
+      if (is_old_pattern) {
+        // Old pattern: {username}-entry-day-{day_number}
+        day_num = parseInt(match[2]);
+        extracted_username = match[1];
+      } else {
+        // New pattern: day-{day_number}-{username}-{date}
+        day_num = parseInt(match[1]);
+        extracted_username = match[2];
+      }
 
       if (day_num < 1 || day_num > 75 || day_num > current_day) {
         return;
       }
 
-      const member = this.guild_members_cache.get(username);
-      if (member) {
-        if (is_old_pattern) {
-          username = member.displayName;
-        } else {
-          username = member.displayName || member.user.username;
+      let member = this.guild_members_cache.get(extracted_username);
+
+      if (!member) {
+        // Try to find by checking all members for username match
+        for (const [key, cached_member] of this.guild_members_cache) {
+          if (cached_member.user.username === extracted_username) {
+            member = cached_member;
+            break;
+          }
         }
+      }
+
+      if (member) {
+        // Always use display name for consistency
+        const display_name = member.displayName || member.user.username;
+
+        if (!this.tracking.user_histories.has(display_name)) {
+          const history = new Array(75).fill('x');
+          this.tracking.user_histories.set(display_name, history);
+        }
+
+        const history = this.tracking.user_histories.get(display_name)!;
+        history[day_num - 1] = this._get_day_character(day_num);
+
+        if (!this.day_completion_debug.has(day_num)) {
+          this.day_completion_debug.set(day_num, []);
+        }
+        this.day_completion_debug.get(day_num)!.push(display_name);
       } else {
-        logger.warn(`Could not find member for ${is_old_pattern ? 'display name' : 'username'}: ${username}`);
+        this.missing_members.add(extracted_username);
       }
-
-      if (!this.tracking.user_histories.has(username)) {
-        const history = new Array(75).fill('x');
-        this.tracking.user_histories.set(username, history);
-      }
-
-      const history = this.tracking.user_histories.get(username)!;
-
-      history[day_num - 1] = this._get_day_character(day_num);
-      logger.debug(`Day ${day_num} for ${username}: COMPLETED`);
     }
   }
 
   private _get_day_character(day: number): string {
-    const day_in_row = ((day - 1) % 10) + 1;
-    return day_in_row === 10 ? '0' : day_in_row.toString();
+    const day_in_row = (day - 1) % 10;
+    return day_in_row.toString();
   }
 
   private async _update_user_history(username: string, day_index: number, status: string): Promise<void> {
@@ -403,7 +534,7 @@ class Status implements Structure {
     const current_day = this._get_current_day();
     const rows: string[] = [];
 
-    for (let row = 0; row < 8; row++) {
+    for (let row = 1; row < 8; row++) {  // Start from row 2 (skip rows 0-1)
       const start_index = row * 10;
       const end_index = row === 7 ? Math.min(start_index + 5, 75) : start_index + 10;
       const row_data = [];
@@ -412,13 +543,15 @@ class Status implements Structure {
         const day_num = i + 1;
 
         if (day_num > current_day) {
-          row_data.push('.');
+          row_data.push('⚐');
+        } else if (day_num === current_day) {
+          row_data.push(history[i] === 'x' ? '-' : history[i]);
         } else {
           row_data.push(history[i] || 'x');
         }
       }
 
-      rows.push(`${row + 1} ${row_data.join('')}`);
+      rows.push(`${row}: ${row_data.join(' ')}`);  // row + 1 maintains correct numbering (starts from 3)
     }
 
     return rows;
@@ -430,9 +563,9 @@ class Status implements Structure {
     const channel = await this.client.channels.fetch(this.channels.statuses_id) as any;
     if (!channel) return;
 
-    const lines = ['```'];
+    const lines = ['```\n0123456789 = completed day\nx = missed/incomplete day\n- = in progress day\n⚐ = future day'];
 
-    const sorted_users = Array.from(this.tracking.user_statuses.keys())
+    const sorted_users = Array.from(this.tracking.user_histories.keys())
       .sort((a, b) => a.localeCompare(b));
 
     for (const username of sorted_users) {
@@ -441,18 +574,21 @@ class Status implements Structure {
         this.tracking.user_histories.set(username, history);
       }
 
-      lines.push(`${username}:`);
+      lines.push(`\n${username}:`);
       const history_rows = this._generate_history_display(username);
       lines.push(...history_rows);
-      lines.push('');
     }
 
     if (lines[lines.length - 1] === '') {
       lines.pop();
     }
-    lines.push('```');
+    lines.push('\n```');
 
     const content = lines.join('\n');
+
+    // Debug: Print what we're about to send
+    logger.info(`History message length: ${content.length}/2000`);
+    logger.debug(`History content preview:\n${content.substring(0, 2000)}...`);
 
     if (this.channels.history_message_id) {
       try {
@@ -479,13 +615,93 @@ class Status implements Structure {
       }
     }
   }
+
+  private _get_incomplete_users(): string[] {
+    const incomplete_users: string[] = [];
+    for (const [username, completed] of this.tracking.user_statuses) {
+      if (!completed) {
+        incomplete_users.push(username);
+      }
+    }
+    return incomplete_users;
+  }
+
+  private async _find_and_delete_previous_reminder(): Promise<void> {
+    const channel = await this.client.channels.fetch(this.channels.statuses_id) as any;
+    if (!channel) return;
+
+    try {
+      const messages = await channel.messages.fetch({ limit: 50 });
+      for (const [message_id, message] of messages) {
+        if (message.content.includes("you all haven't completed your entry yet")) {
+          await message.delete();
+          break;
+        }
+      }
+    } catch (e) {
+      logger.error(`Failed to delete previous reminder: ${e}`);
+    }
+  }
+
+  private async _send_reminder_message(incomplete_users: string[]): Promise<void> {
+    const channel = await this.client.channels.fetch(this.channels.statuses_id) as any;
+    if (!channel || incomplete_users.length === 0) return;
+
+    try {
+      const guild = await this.client.guilds.fetch(process.env.GUILD_ID || "");
+      if (!guild) return;
+
+      const members = await guild.members.fetch();
+      const user_ids: string[] = [];
+
+      for (const [_, member] of members) {
+        if (incomplete_users.includes(member.user.username) || incomplete_users.includes(member.displayName)) {
+          user_ids.push(member.user.id);
+        }
+      }
+
+      if (user_ids.length === 0) return;
+
+      const mentions = user_ids.map(id => `<@!${id}>`).join(' ');
+      const content = `${mentions}: you all haven't completed your entry yet!`;
+
+      const message = await channel.send(content);
+      this.channels.reminder_message_id = message.id;
+      logger.info(`Sent reminder to ${user_ids.length} users`);
+    } catch (e) {
+      logger.error(`Failed to send reminder: ${e}`);
+    }
+  }
+
+  private async _check_reminders(): Promise<void> {
+    const now = new Date();
+    const pst = new Date(now.toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles"
+    }));
+
+    const hours = pst.getHours();
+    const minutes = pst.getMinutes();
+    const current_time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+
+    const reminder_times = ['22:30', '23:00', '23:15', '23:30'];
+
+    if (reminder_times.includes(current_time)) {
+      const incomplete_users = this._get_incomplete_users();
+
+      if (incomplete_users.length > 0) {
+        await this._find_and_delete_previous_reminder();
+        await this._send_reminder_message(incomplete_users);
+      }
+    }
+  }
 }
 
 const Tracker = new Status({
   client: discord_client,
   statuses_channel_id: process.env.STATUSES_CHANNEL_ID || "",
   statuses_message_id: process.env.STATUSES_MESSAGE_ID || "",
-  history_message_id: process.env.HISTORY_MESSAGE_ID || ""
+  history_message_id: process.env.HISTORY_MESSAGE_ID || "",
+  reminder_message_id: process.env.REMINDER_MESSAGE_ID || ""
 });
 
 export { Tracker };

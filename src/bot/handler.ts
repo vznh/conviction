@@ -11,6 +11,7 @@ import {
 import { logger } from "@/lib/logger";
 import { MESSAGES } from "@/constants/messages";
 import { LOGISTICS } from "@/constants/logistics";
+import { EMBEDS } from "@/constants/embeds";
 import { discord_client } from "@/lib/client";
 import { entry_service } from "@/services/entry-service";
 
@@ -129,6 +130,19 @@ class Handler implements Structure {
         await thread.send({ embeds: [embed] });
       }
 
+      const delete_row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('delete_thread')
+            .setLabel("Delete this thread")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+      await thread.send({
+        embeds: [EMBEDS.STATUS.DELETE_THREAD],
+        components: [delete_row]
+      });
+
       logger.info(`DEV: Created thread: ${name} for ${username}.`);
       return thread;
     } catch (e) {
@@ -181,7 +195,15 @@ class Handler implements Structure {
   // --------- PRIVATE -----------
   private _setup_listeners(channel: any): void {
     this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isButton() || interaction.channelId !== channel.id) return;
+      if (!interaction.isButton()) return;
+
+      if (interaction.channelId !== channel.id) {
+        if (interaction.customId === 'delete_thread') {
+          await this._delete_thread(interaction);
+        }
+        return;
+      }
+
       if (interaction.customId === 'create_entry') {
         await this._create_entry(interaction);
       } else if (interaction.customId === 'view_entries') {
@@ -200,6 +222,22 @@ class Handler implements Structure {
     const current_date = new Date();
     const days_diff = Math.floor((current_date.getTime() - start_date.getTime()) / (1000 * 60 * 60 * 24));
     const day = Math.max(1, days_diff + 1);
+
+    await channel.threads.fetchActive();
+    const active_threads = channel.threads.cache;
+
+    const existing_thread = active_threads.find((thread: any) => {
+      const match = thread.name.match(/day-(\d+)-/i);
+      const thread_day = match ? parseInt(match[1]) : 0;
+      return thread_day === day && thread.members.cache.has(interaction.user.id);
+    });
+
+    if (existing_thread) {
+      await interaction.editReply({
+        content: `**ERROR**: You already have a thread for Day ${day}. Complete it before creating a new one!`
+      });
+      return;
+    }
 
     const thread = await this.create(
       interaction.user.id,
@@ -224,6 +262,39 @@ class Handler implements Structure {
     await interaction.editReply({
       content: "**SUCCESS**: Your entries have been sent through DMs."
     });
+  }
+
+  private async _delete_thread(interaction: any): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (!interaction.channel || !interaction.channel.isThread()) {
+      await interaction.editReply({
+        content: "**ERROR**: This can only be used in a thread."
+      });
+      return;
+    }
+
+    const thread = interaction.channel;
+    const thread_owner_match = thread.name.match(/day-\d+-([^-]+)/);
+    const thread_username = thread_owner_match ? thread_owner_match[1] : '';
+
+    if (interaction.user.username !== thread_username && !interaction.memberPermissions?.has('ManageThreads')) {
+      await interaction.editReply({
+        content: "**ERROR**: You can only delete your own thread."
+      });
+      return;
+    }
+
+    try {
+      await thread.delete();
+      await interaction.editReply({
+        content: "**SUCCESS**: Thread deleted successfully."
+      });
+    } catch (error) {
+      await interaction.editReply({
+        content: "**ERROR**: Failed to delete thread."
+      });
+    }
   }
 }
 
